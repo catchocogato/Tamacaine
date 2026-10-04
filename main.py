@@ -75,10 +75,10 @@ class PetView(View):
 
         tama.state = "happy"
         await interaction.response.edit_message(embed=make_embed(), view=get_view())
-        await interaction.followup.send("You cheered Caine up! ❤️", ephemeral=True)
+        await interaction.followup.send("You cheered Caine up! ❤️", ephemeral=False)
 
 # ---------- Background state machine ----------
-@tasks.loop(minutes=10)
+@tasks.loop(seconds=30)
 async def state_loop():
     if tama.state == "idle":
         tama.state = "sad"
