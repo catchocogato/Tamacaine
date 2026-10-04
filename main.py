@@ -78,7 +78,7 @@ class PetView(View):
         await interaction.followup.send(f"{interaction.user.mention} You cheered Caine up! ❤️", ephemeral=False)
 
 # ---------- Background state machine ----------
-@tasks.loop(seconds=30)
+@tasks.loop(minutes=10)
 async def state_loop():
     if tama.state == "idle":
         tama.state = "sad"
