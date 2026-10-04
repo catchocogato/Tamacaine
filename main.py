@@ -77,13 +77,34 @@ class PetView(View):
         await interaction.response.edit_message(embed=make_embed(), view=get_view())
         await interaction.followup.send(f"{interaction.user.mention} You cheered Caine up! ❤️", ephemeral=False)
 
+# === Durations in seconds ===
+DURATIONS = {
+    "happy": 10 * 60,   # 10 minutes
+    "idle":  10 * 60,   # 10 minutes
+    # "sad" has no duration – it stays forever
+}
+
 # ---------- Background state machine ----------
-@tasks.loop(minutes=10)
+@tasks.loop(minutes=1)
+
+async def state_loop():
+    if tama.state == "sad":
+        return  # do nothing – sad is permanent until an event
+
+    now = time.time()
+        elapsed = now - tama.last_change
+        max_duration = DURATIONS.get(tama.state)
+    
+        if max_duration is None or elapsed < max_duration:
+            return  # still within the allowed time
+
 async def state_loop():
     if tama.state == "idle":
         tama.state = "sad"
     elif tama.state == "happy":
         tama.state = "idle"
+
+tama.last_change = now
 
     if tama.message:
         try:
