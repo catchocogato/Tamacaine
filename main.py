@@ -1,26 +1,12 @@
-import discord
-from discord.ext import commands
-
-intents = discord.Intents.all()
-bot = commands.Bot(".", intents=intents)
-
-bot = commands.Bot(command_prefix="!", intents=intents)
-
+import os
+import time
 import discord
 from discord.ext import commands, tasks
 from discord.ui import Button, View
 
+# ---------- Bot setup ----------
 intents = discord.Intents.default()
 intents.message_content = True
-
-bot = commands.Bot(command_prefix="!", intents=intents)
-import discord
-from discord.ext import commands, tasks
-from discord.ui import Button, View
-
-intents = discord.Intents.default()
-intents.message_content = True
-
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ---------- GIF links ----------
@@ -29,13 +15,22 @@ GIFS = {
     "sad":   "https://media.discordapp.net/attachments/1001158082522517545/1553548399884640386/sadgif.gif?ex=6ab9a632&is=6ab854b2&hm=b218934715fa4a2152da3034e48b776008be0386b04d5fed3fd4caf3f33f8aeb&=",
     "happy": "https://media.discordapp.net/attachments/1001158082522517545/1553548400849584248/happygif.gif?ex=6ab9a632&is=6ab854b2&hm=a0dae47643cb02f05656b34cccdd38eb5f240eda3f13fa31ba946a00326e67ca&=",
 }
-# ---------- Pet state (renamed to avoid conflict) ----------
+
+# ---------- Pet state ----------
 class Pet:
     def __init__(self):
         self.state = "idle"
         self.message = None
+        self.last_change = time.time()
 
-tama = Pet()          # ← changed from "pet" to "tama"
+tama = Pet()
+
+# ---------- Durations (in seconds) ----------
+DURATIONS = {
+    "happy": 10 * 60,   # 10 minutes
+    "idle":  10 * 60,   # 10 minutes
+    # "sad" has no duration → stays forever until cheered
+}
 
 # ---------- Helpers ----------
 def make_embed():
@@ -49,7 +44,6 @@ def make_embed():
         "sad":   "😢 Sad",
         "happy": "😊 Happy",
     }
-
     embed = discord.Embed(
         title=f"Tamagotchi — {titles[tama.state]}",
         color=colors[tama.state]
@@ -67,44 +61,50 @@ class PetView(View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Cheer up!", style=discord.ButtonStyle.success, custom_id="cheer_up")
+    @discord.ui.button(
+        label="Cheer up!",
+        style=discord.ButtonStyle.success,
+        custom_id="cheer_up"
+    )
     async def cheer_up(self, interaction: discord.Interaction, button: Button):
         if tama.state != "sad":
-            await interaction.response.send_message("Caine is not sad right now 🐾", ephemeral=True)
+            await interaction.response.send_message(
+                "Caine is not sad right now 🐾", ephemeral=True
+            )
             return
 
         tama.state = "happy"
-        await interaction.response.edit_message(embed=make_embed(), view=get_view())
-        await interaction.followup.send(f"{interaction.user.mention} You cheered Caine up! ❤️", ephemeral=False)
+        tama.last_change = time.time()  # reset the timer
 
-# === Durations in seconds ===
-DURATIONS = {
-    "happy": 10 * 60,   # 10 minutes
-    "idle":  10 * 60,   # 10 minutes
-    # "sad" has no duration – it stays forever
-}
+        await interaction.response.edit_message(
+            embed=make_embed(),
+            view=get_view()
+        )
+        await interaction.followup.send(
+            f"{interaction.user.mention} cheered Caine up! ❤️",
+            ephemeral=False
+        )
 
 # ---------- Background state machine ----------
 @tasks.loop(minutes=1)
-
 async def state_loop():
     if tama.state == "sad":
-        return  # do nothing – sad is permanent until an event
+        return  # sad stays forever until someone cheers
 
     now = time.time()
-        elapsed = now - tama.last_change
-        max_duration = DURATIONS.get(tama.state)
-    
-        if max_duration is None or elapsed < max_duration:
-            return  # still within the allowed time
+    elapsed = now - tama.last_change
+    max_duration = DURATIONS.get(tama.state)
 
-async def state_loop():
-    if tama.state == "idle":
-        tama.state = "sad"
-    elif tama.state == "happy":
+    if max_duration is None or elapsed < max_duration:
+        return  # still waiting
+
+    # Time expired → advance state
+    if tama.state == "happy":
         tama.state = "idle"
+    elif tama.state == "idle":
+        tama.state = "sad"
 
-tama.last_change = now
+    tama.last_change = now
 
     if tama.message:
         try:
@@ -132,5 +132,4 @@ async def pet(ctx):
     tama.message = msg
 
 # ---------- Run ----------
-import os
 bot.run(os.getenv("DISCORD_TOKEN"))
